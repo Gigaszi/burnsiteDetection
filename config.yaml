@@ -1,0 +1,29 @@
+dnbr_cat_names:
+  - "Enhanced Regrowth"
+  - "Unburned"
+  - "Low Severity"
+  - "Moderate Severity"
+  - "High Severity"
+
+nbr_colors:
+  - "g"
+  - "yellowgreen"
+  - "peachpuff"
+  - "coral"
+  - "maroon"
+
+nbr_cmap:
+  colors:
+    - "g"
+    - "yellowgreen"
+    - "peachpuff"
+    - "coral"
+    - "maroon"
+
+dnbr_class_bins:
+  - -Infinity
+  - -0.1
+  - 0.1
+  - 0.27
+  - 0.66
+  - Infinity
