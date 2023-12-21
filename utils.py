@@ -192,6 +192,8 @@ def plot_dnbr(dnbr, extent):
     # reclassify raster https://www.earthdatascience.org/courses/use-data-open-source-python/intro-raster-data-python/raster-data-processing/classify-plot-raster-data-in-python/
     dnbr_class_bins = get_from_config("dnbr_class_bins")
 
+    print(dnbr_class_bins)
+    print(dnbr_cat_names)
     #dnbr_landsat_class = np.digitize(dnbr, dnbr_class_bins)
 
     dnbr_landsat_class = xr.apply_ufunc(np.digitize,
@@ -223,4 +225,12 @@ def plot_dnbr(dnbr, extent):
     plt.show()
 
 
+def get_pre_and_post_fire_paths():
+    pre_fire = get_paths_to_bands(get_from_config("pre_fire")[0], [5, 6, 7])
+    post_fire = get_paths_to_bands(get_from_config("post_fire")[0], [5, 6, 7])
+    pre_fire.sort()
+    post_fire.sort()
+    pre_fire = combine_tifs(pre_fire)
+    post_fire = combine_tifs(post_fire)
 
+    return pre_fire, post_fire

@@ -13,17 +13,23 @@ nbr_colors:
   - "maroon"
 
 nbr_cmap:
-  colors:
     - "g"
     - "yellowgreen"
     - "peachpuff"
     - "coral"
     - "maroon"
+    - "black"
 
 dnbr_class_bins:
-  - -Infinity
+  - -1000
   - -0.1
   - 0.1
   - 0.27
   - 0.66
-  - Infinity
+  - 1000
+
+pre_fire:
+  - "bc_burn"
+
+post_fire:
+    - "bc_burn2"
