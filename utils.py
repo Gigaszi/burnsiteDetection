@@ -1,23 +1,33 @@
 import os
 import re
-from glob import glob
 
 import numpy as np
+import rasterio
+from rasterio.transform import from_origin
 import xarray as xr
 import rioxarray as rxr
 import yaml
 import matplotlib.pyplot as plt
-import earthpy.spatial as es
 import earthpy.plot as ep
 from matplotlib.colors import ListedColormap
 from numpy import ma
 
 
-def get_from_config(key: str):
+def get_from_config(key: str) -> list:
+    """
+    Retrieve a value from the configuration file.
+
+    Parameters:
+    - key (str): The key for the desired value in the configuration file.
+
+    Returns:
+    - The value associated with the specified key in the configuration file.
+
+    """
     with open('config.yaml', 'r') as config_file:
         return yaml.safe_load(config_file)[key]
 
-def combine_tifs(tif_list):
+def combine_tifs(tif_list) -> xr.DataArray:
     """
     A function that combines a list of tifs in the same CRS
     and of the same extent into an xarray object
@@ -42,7 +52,7 @@ def combine_tifs(tif_list):
     return xr.concat(out_xr, dim="band")
 
 
-def get_paths_to_bands(path_to_directory: str, bands: list):
+def get_paths_to_bands(path_to_directory: str, bands: list) -> list:
     """
     Get file paths for specific bands within a directory.
 
@@ -80,27 +90,7 @@ def get_paths_to_bands(path_to_directory: str, bands: list):
         return None
 
 
-def plot_rgb(image_path, figsize=(10, 10)):
-    """
-    Plot a three-band image.
-
-    Parameters:
-    - image_path (str): The relative path to the image file.
-    - figsize (tuple): A tuple of integers representing the figure size.
-
-    Returns:
-    - None
-
-    Example:
-     plot_rgb('data/example.tif', figsize=(10, 10))
-
-    """
-
-    image = rxr.open_rasterio(image_path, masked=True).squeeze()
-    image.plot.imshow(robust=True, figsize=figsize)
-
-
-def calculate_nbr(bands):
+def calculate_nbr(bands) -> xr.DataArray:
     """
     Calculate the Normalized Burn Ratio (NBR) using input bands.
 
@@ -119,7 +109,7 @@ def calculate_nbr(bands):
 
     return (bands[0] - bands[2]) / (bands[0] + bands[2])
 
-def plot_nbr(bands, extent):
+def plot_nbr(bands, extent) -> None:
     fig, ax = plt.subplots(figsize=(12, 6))
 
     ep.plot_bands(bands,
@@ -132,40 +122,8 @@ def plot_nbr(bands, extent):
 
     plt.show()
 
-def plot_satellite_imagery(path_to_directory, bands):
 
-    #
-    # stack_band_paths = get_paths_to_bands(path_to_directory, bands)
-    # stack_band_paths.sort()
-    #
-    # arr_st, meta = es.stack(stack_band_paths, nodata=-9999)
-    #
-    # fig, ax = plt.subplots(figsize=(12, 12))
-    #
-    # ep.plot_rgb(arr_st,
-    #             title='RGB Satellite Image',
-    #             stretch=True,  # Apply histogram stretch to improve contrast
-    #             str_clip=0.5,  # Adjust this parameter to control the stretch intensity
-    #             figsize=(10, 10))
-    # plt.show()
-
-    red_band = get_paths_to_bands(path_to_directory, [bands[0]])[0]
-    green_band = get_paths_to_bands(path_to_directory, [bands[1]])[0]
-    blue_band = get_paths_to_bands(path_to_directory, [bands[2]])[0]
-
-    # Stack the three bands
-    arr_st, meta = es.stack([red_band, green_band, blue_band], nodata=-9999)
-
-    fig, ax = plt.subplots(figsize=(12, 12))
-
-    ep.plot_rgb(arr_st,
-                title='RGB Satellite Image',
-                stretch=True,  # Apply histogram stretch to improve contrast
-                str_clip=0.5,  # Adjust this parameter to control the stretch intensity
-                figsize=(10, 10))
-    plt.show()
-
-def calculate_dnbr(pre_fire_nbr, post_fire_nbr):
+def calculate_dnbr(pre_fire_nbr, post_fire_nbr) -> xr.DataArray:
     """
     Calculate the differenced normalized burn ratio (dNBR) using input bands.
 
@@ -182,7 +140,61 @@ def calculate_dnbr(pre_fire_nbr, post_fire_nbr):
 
     return pre_fire_nbr - post_fire_nbr
 
-def plot_dnbr(dnbr, extent):
+def save_dnbr_as_tif(dnbr, extent) -> None:
+    dnbr_cat_names = get_from_config("dnbr_cat_names")
+
+    nbr_colors = get_from_config("nbr_colors")
+    nbr_cmap = ListedColormap(nbr_colors)
+
+    # Define dNBR classification bins
+    # reclassify raster https://www.earthdatascience.org/courses/use-data-open-source-python/intro-raster-data-python/raster-data-processing/classify-plot-raster-data-in-python/
+    dnbr_class_bins = get_from_config("dnbr_class_bins")
+
+    print(dnbr_class_bins)
+    print(dnbr_cat_names)
+    #dnbr_landsat_class = np.digitize(dnbr, dnbr_class_bins)
+
+    dnbr_landsat_class = xr.apply_ufunc(np.digitize,
+                                        dnbr,
+                                        dnbr_class_bins)
+    # Plot the data with a custom legend
+    dnbr_landsat_class_plot = ma.masked_array(
+        dnbr_landsat_class.values, dnbr_landsat_class.isnull())
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    classes = np.unique(dnbr_landsat_class_plot)
+    classes = classes.tolist()[:5]
+    reversed_dnbr = np.flip(dnbr, axis=0)
+    transform = from_origin(extent[0], extent[2], dnbr.rio.resolution()[0],
+                            dnbr.rio.resolution()[1])
+
+    output_path = get_from_config("output_path")
+
+    with rasterio.open(
+        output_path[0] + '/dnbr.tif',
+        'w',
+        driver='GTiff',
+        height=reversed_dnbr.shape[0],
+        width=reversed_dnbr.shape[1],
+        count=1,
+        dtype=str(reversed_dnbr.dtype),
+        crs=dnbr.rio.crs,
+        transform=transform,
+    ) as dst:
+        dst.write(reversed_dnbr, 1)
+
+def get_pre_and_post_fire_paths() -> tuple:
+    pre_fire = get_paths_to_bands(get_from_config("pre_fire")[0], [5, 6, 7])
+    post_fire = get_paths_to_bands(get_from_config("post_fire")[0], [5, 6, 7])
+    pre_fire.sort()
+    post_fire.sort()
+    pre_fire = combine_tifs(pre_fire)
+    post_fire = combine_tifs(post_fire)
+
+    return pre_fire, post_fire
+
+def plot_dnbr(dnbr, extent) -> None:
     dnbr_cat_names = get_from_config("dnbr_cat_names")
 
     nbr_colors = get_from_config("nbr_colors")
@@ -223,14 +235,3 @@ def plot_dnbr(dnbr, extent):
                    titles=dnbr_cat_names)
 
     plt.show()
-
-
-def get_pre_and_post_fire_paths():
-    pre_fire = get_paths_to_bands(get_from_config("pre_fire")[0], [5, 6, 7])
-    post_fire = get_paths_to_bands(get_from_config("post_fire")[0], [5, 6, 7])
-    pre_fire.sort()
-    post_fire.sort()
-    pre_fire = combine_tifs(pre_fire)
-    post_fire = combine_tifs(post_fire)
-
-    return pre_fire, post_fire

@@ -33,3 +33,6 @@ pre_fire:
 
 post_fire:
     - "bc_burn2"
+
+output_path:
+  - "output"
