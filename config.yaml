@@ -29,10 +29,13 @@ dnbr_class_bins:
   - 1000
 
 pre_fire:
-  - "bc_burn"
+  - "sentinel"
 
 post_fire:
-    - "bc_burn2"
+    - "sentinel"
+
+satellite:
+  - "sentinel"
 
 output_path:
   - "output"
