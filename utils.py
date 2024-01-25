@@ -77,7 +77,7 @@ def get_paths_to_bands(path_to_directory: str, bands: list, satellite: str) -> l
         elif len(bands) == 1:
             bands_pattern = f"B{bands[0]:02d}"
         else:
-            bands_pattern = '|'.join(f"B{band:02d}" for band in bands)
+            bands_pattern = '|'.join(f"B{band}" for band in bands)
 
         current_directory = os.path.dirname(__file__)
         folder_path = os.path.join(current_directory, path_to_directory)
@@ -133,6 +133,10 @@ def calculate_nbr(bands) -> xr.DataArray:
 
     return (bands[0] - bands[2]) / (bands[0] + bands[2])
 
+def calculate_nbr_plus(bands) -> xr.DataArray:
+    # ['02', '03', '8A', '12']
+    return ((bands[3] - bands[2] - bands[1] - bands[0]) / (bands[3] + bands[2] + bands[1] + bands[0]))
+
 def plot_nbr(bands, extent) -> None:
     fig, ax = plt.subplots(figsize=(12, 6))
 
@@ -142,7 +146,7 @@ def plot_nbr(bands, extent) -> None:
                   vmax=1,
                   ax=ax,
                   extent=extent,
-                  title="Landsat derived Normalized Burn Ratio\n 23 July 2016 \n Post Cold Springs Fire")
+                  title="Derived Normalized Burn Ratio\n 23 July 2016 \n Post Cold Springs Fire")
 
     plt.show()
 
@@ -165,6 +169,7 @@ def calculate_dnbr(pre_fire_nbr, post_fire_nbr) -> xr.DataArray:
     return pre_fire_nbr - post_fire_nbr
 
 def save_dnbr_as_tif(dnbr, extent) -> None:
+    output_path = get_from_config("output_path")
     dnbr_cat_names = get_from_config("dnbr_cat_names")
 
     nbr_colors = get_from_config("nbr_colors")
@@ -181,6 +186,11 @@ def save_dnbr_as_tif(dnbr, extent) -> None:
     dnbr_landsat_class = xr.apply_ufunc(np.digitize,
                                         dnbr,
                                         dnbr_class_bins)
+
+    dnbr_landsat_class.plot.imshow(cmap=nbr_cmap)
+    plt.show()
+    plt.savefig(f'{output_path[0]}/classes.png')
+
     # Plot the data with a custom legend
     dnbr_landsat_class_plot = ma.masked_array(
         dnbr_landsat_class.values, dnbr_landsat_class.isnull())
@@ -193,24 +203,25 @@ def save_dnbr_as_tif(dnbr, extent) -> None:
     transform = from_origin(extent[0], extent[2], dnbr.rio.resolution()[0],
                             dnbr.rio.resolution()[1])
 
-    output_path = get_from_config("output_path")
 
     with rasterio.open(
-        output_path[0] + '/dnbr.tif',
-        'w',
-        driver='GTiff',
-        height=reversed_dnbr.shape[0],
-        width=reversed_dnbr.shape[1],
-        count=1,
-        dtype=str(reversed_dnbr.dtype),
-        crs=dnbr.rio.crs,
-        transform=transform,
+            output_path[0] + '/dnbr.tif',
+            'w',
+            driver='GTiff',
+            height=dnbr_landsat_class.shape[0],
+            width=dnbr_landsat_class.shape[1],
+            count=1,
+            dtype=str(dnbr_landsat_class.dtype),
+            crs=dnbr.rio.crs,
+            transform=transform,
     ) as dst:
-        dst.write(reversed_dnbr, 1)
+        dst.write(dnbr_landsat_class, 1)
 
-def get_pre_and_post_fire_paths() -> tuple:
-    pre_fire = get_paths_to_bands(get_from_config("pre_fire")[0], [5, 6, 7], get_from_config("satellite")[0])
-    post_fire = get_paths_to_bands(get_from_config("post_fire")[0], [5, 6, 7], get_from_config("satellite")[0])
+def get_pre_and_post_fire_paths(satellite) -> tuple:
+    if satellite == 'sentinel':
+        bands = ['02', '03', '8A', '12']
+    pre_fire = get_paths_to_bands(get_from_config("pre_fire")[0], bands, get_from_config("satellite")[0])
+    post_fire = get_paths_to_bands(get_from_config("post_fire")[0], bands, get_from_config("satellite")[0])
     pre_fire.sort()
     post_fire.sort()
     pre_fire = combine_tifs(pre_fire)
