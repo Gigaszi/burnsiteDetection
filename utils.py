@@ -137,18 +137,18 @@ def calculate_nbr_plus(bands) -> xr.DataArray:
     # ['02', '03', '8A', '12']
     return ((bands[3] - bands[2] - bands[1] - bands[0]) / (bands[3] + bands[2] + bands[1] + bands[0]))
 
-def plot_nbr(bands, extent) -> None:
+def plot_nbr(bands, extent, date) -> None:
     fig, ax = plt.subplots(figsize=(12, 6))
 
     ep.plot_bands(bands,
-                  cmap="viridis",
+                  cmap='rainbow',
                   vmin=-1,
                   vmax=1,
                   ax=ax,
                   extent=extent,
-                  title="Derived Normalized Burn Ratio\n 23 July 2016 \n Post Cold Springs Fire")
+                  title=f"Derived Normalized Burn Ratio\n {date}")
 
-    plt.show()
+    plt.savefig(f'output/NBR_{date.replace(' ', '_')}.png')
 
 
 def calculate_dnbr(pre_fire_nbr, post_fire_nbr) -> xr.DataArray:
@@ -168,7 +168,7 @@ def calculate_dnbr(pre_fire_nbr, post_fire_nbr) -> xr.DataArray:
 
     return pre_fire_nbr - post_fire_nbr
 
-def save_dnbr_as_tif(dnbr, extent) -> None:
+def save_dnbr_as_tif_and_hist(dnbr, extent) -> None:
     output_path = get_from_config("output_path")
     dnbr_cat_names = get_from_config("dnbr_cat_names")
 
@@ -179,23 +179,29 @@ def save_dnbr_as_tif(dnbr, extent) -> None:
     # reclassify raster https://www.earthdatascience.org/courses/use-data-open-source-python/intro-raster-data-python/raster-data-processing/classify-plot-raster-data-in-python/
     dnbr_class_bins = get_from_config("dnbr_class_bins")
 
-    print(dnbr_class_bins)
-    print(dnbr_cat_names)
     #dnbr_landsat_class = np.digitize(dnbr, dnbr_class_bins)
 
     dnbr_landsat_class = xr.apply_ufunc(np.digitize,
                                         dnbr,
                                         dnbr_class_bins)
 
+    fig, ax = plt.subplots(figsize=(10, 8))
     dnbr_landsat_class.plot.imshow(cmap=nbr_cmap)
-    plt.show()
-    plt.savefig(f'{output_path[0]}/classes.png')
-
     # Plot the data with a custom legend
     dnbr_landsat_class_plot = ma.masked_array(
         dnbr_landsat_class.values, dnbr_landsat_class.isnull())
+    ax.set_title('Difference in NBR+ between 4th of June and 7th of October 2023')
+    ax.set_xticks(ax.get_xticks())
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+    # plt.show()
+    plt.savefig(f'{output_path[0]}/classes.png')
 
     fig, ax = plt.subplots(figsize=(10, 8))
+    dnbr_landsat_class.plot.hist()
+    ax.set_title('Difference in NBR+ between 4th of June and 7th of October 2023')
+    plt.savefig(f'{output_path[0]}/hist.png')
+
+
 
     classes = np.unique(dnbr_landsat_class_plot)
     classes = classes.tolist()[:5]
