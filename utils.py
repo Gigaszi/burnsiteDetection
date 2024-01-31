@@ -141,14 +141,14 @@ def plot_nbr(bands, extent, date) -> None:
     fig, ax = plt.subplots(figsize=(12, 6))
 
     ep.plot_bands(bands,
-                  cmap='rainbow',
+                  cmap='viridis',
                   vmin=-1,
                   vmax=1,
                   ax=ax,
                   extent=extent,
                   title=f"Derived Normalized Burn Ratio\n {date}")
 
-    plt.savefig(f'output/NBR_{date.replace(' ', '_')}.png')
+    plt.savefig(f'output/NBR_{date.replace(" ", "_")}.png')
 
 
 def calculate_dnbr(pre_fire_nbr, post_fire_nbr) -> xr.DataArray:
@@ -197,7 +197,11 @@ def save_dnbr_as_tif_and_hist(dnbr, extent) -> None:
     plt.savefig(f'{output_path[0]}/classes.png')
 
     fig, ax = plt.subplots(figsize=(10, 8))
-    dnbr_landsat_class.plot.hist()
+    dnbr_landsat_class.plot()
+
+    # numpy_array = dnbr_landsat_class.values.flatten()
+    # plt.bar(range(len(numpy_array)), numpy_array, color=nbr_colors)
+
     ax.set_title('Difference in NBR+ between 4th of June and 7th of October 2023')
     plt.savefig(f'{output_path[0]}/hist.png')
 
@@ -223,9 +227,14 @@ def save_dnbr_as_tif_and_hist(dnbr, extent) -> None:
     ) as dst:
         dst.write(dnbr_landsat_class, 1)
 
-def get_pre_and_post_fire_paths(satellite) -> tuple:
+def get_pre_and_post_fire_paths(satellite, method) -> tuple:
     if satellite == 'sentinel':
-        bands = ['02', '03', '8A', '12']
+        if method == 'nbr':
+            bands = ["08", "06", "12"]
+        elif method == 'nbr+':
+            bands = ['02', '03', '8A', '12']
+    elif satellite == 'landsat':
+        bands = [5, 6, 7]
     pre_fire = get_paths_to_bands(get_from_config("pre_fire")[0], bands, get_from_config("satellite")[0])
     post_fire = get_paths_to_bands(get_from_config("post_fire")[0], bands, get_from_config("satellite")[0])
     pre_fire.sort()
