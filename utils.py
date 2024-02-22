@@ -5,6 +5,7 @@ from typing import List
 import numpy as np
 import rasterio
 from rasterio.transform import from_origin
+from rasterio.merge import merge
 import xarray as xr
 import rioxarray as rxr
 import yaml
@@ -28,6 +29,7 @@ def get_from_config(key: str) -> list:
     with open('config.yaml', 'r') as config_file:
         return yaml.safe_load(config_file)[key]
 
+
 def combine_tifs(tif_list) -> xr.DataArray:
     """
     A function that combines a list of tifs in the same CRS
@@ -48,7 +50,7 @@ def combine_tifs(tif_list) -> xr.DataArray:
     out_xr = []
     for i, tif_path in enumerate(tif_list):
         out_xr.append(rxr.open_rasterio(tif_path, masked=True).squeeze())
-        out_xr[i]["band"] = i+1
+        out_xr[i]["band"] = i + 1
 
     return xr.concat(out_xr, dim="band")
 
@@ -102,7 +104,7 @@ def get_paths_to_bands(path_to_directory: str, bands: list, satellite: str) -> l
 
         folder_path = os.path.join(current_directory, path_to_directory)
 
-        pattern = re.compile(rf'.*_B[{bands_pattern}]\.TIF')
+        pattern = re.compile(rf'.*_B[{bands_pattern}]\.TIF', re.IGNORECASE)
         matching_files = [file for file in os.listdir(folder_path) if pattern.match(file)]
 
         if matching_files:
@@ -113,6 +115,7 @@ def get_paths_to_bands(path_to_directory: str, bands: list, satellite: str) -> l
     else:
         print("Satellite not supported.")
         return None
+
 
 def calculate_nbr(bands) -> xr.DataArray:
     """
@@ -133,9 +136,11 @@ def calculate_nbr(bands) -> xr.DataArray:
 
     return (bands[0] - bands[2]) / (bands[0] + bands[2])
 
+
 def calculate_nbr_plus(bands) -> xr.DataArray:
     # ['02', '03', '8A', '12']
     return ((bands[3] - bands[2] - bands[1] - bands[0]) / (bands[3] + bands[2] + bands[1] + bands[0]))
+
 
 def plot_nbr(bands, extent, date) -> None:
     fig, ax = plt.subplots(figsize=(12, 6))
@@ -168,6 +173,7 @@ def calculate_dnbr(pre_fire_nbr, post_fire_nbr) -> xr.DataArray:
 
     return pre_fire_nbr - post_fire_nbr
 
+
 def save_dnbr_as_tif_and_hist(dnbr, extent) -> None:
     output_path = get_from_config("output_path")
     dnbr_cat_names = get_from_config("dnbr_cat_names")
@@ -179,7 +185,7 @@ def save_dnbr_as_tif_and_hist(dnbr, extent) -> None:
     # reclassify raster https://www.earthdatascience.org/courses/use-data-open-source-python/intro-raster-data-python/raster-data-processing/classify-plot-raster-data-in-python/
     dnbr_class_bins = get_from_config("dnbr_class_bins")
 
-    #dnbr_landsat_class = np.digitize(dnbr, dnbr_class_bins)
+    # dnbr_landsat_class = np.digitize(dnbr, dnbr_class_bins)
 
     dnbr_landsat_class = xr.apply_ufunc(np.digitize,
                                         dnbr,
@@ -205,14 +211,11 @@ def save_dnbr_as_tif_and_hist(dnbr, extent) -> None:
     ax.set_title('Difference in NBR+ between 4th of June and 7th of October 2023')
     plt.savefig(f'{output_path[0]}/hist.png')
 
-
-
     classes = np.unique(dnbr_landsat_class_plot)
     classes = classes.tolist()[:5]
     reversed_dnbr = np.flip(dnbr_landsat_class_plot, axis=0)
     transform = from_origin(extent[0], extent[2], dnbr.rio.resolution()[0],
                             dnbr.rio.resolution()[1])
-
 
     with rasterio.open(
             output_path[0] + '/dnbr.tif',
@@ -226,6 +229,7 @@ def save_dnbr_as_tif_and_hist(dnbr, extent) -> None:
             transform=transform,
     ) as dst:
         dst.write(dnbr_landsat_class, 1)
+
 
 def get_pre_and_post_fire_paths(satellite, method) -> tuple:
     if satellite == 'sentinel':
@@ -244,6 +248,7 @@ def get_pre_and_post_fire_paths(satellite, method) -> tuple:
 
     return pre_fire, post_fire
 
+
 def plot_dnbr(dnbr, extent) -> None:
     dnbr_cat_names = get_from_config("dnbr_cat_names")
 
@@ -256,7 +261,7 @@ def plot_dnbr(dnbr, extent) -> None:
 
     print(dnbr_class_bins)
     print(dnbr_cat_names)
-    #dnbr_landsat_class = np.digitize(dnbr, dnbr_class_bins)
+    # dnbr_landsat_class = np.digitize(dnbr, dnbr_class_bins)
 
     dnbr_landsat_class = xr.apply_ufunc(np.digitize,
                                         dnbr,
@@ -285,3 +290,32 @@ def plot_dnbr(dnbr, extent) -> None:
                    titles=dnbr_cat_names)
 
     plt.show()
+
+
+def mosaic_xr_arrays(input_arrays, output_file, to_file=False):
+    if to_file:
+        numpy_arrays = [da.values for da in input_arrays]
+
+        # Merge the numpy arrays
+        mosaic = np.concatenate(numpy_arrays, axis=0)
+
+        # Get the transform and shape from one of the input arrays
+        out_trans = input_arrays[0].rio.transform()
+
+        # Write the mosaic to the output file
+        with rasterio.open(output_file, "w", driver="GTiff",
+                           height=mosaic.shape[1], width=mosaic.shape[2],
+                           count=mosaic.shape[0], dtype=mosaic.dtype,
+                           crs=input_arrays[0].rio.crs,
+                           transform=out_trans) as dest:
+            for i in range(mosaic.shape[0]):
+                dest.write(mosaic[i], i + 1)
+    else:
+        mosaic = np.concatenate(input_arrays, axis=0)
+        return mosaic
+
+
+def clip_xarray_to_extent(input_data, extent):
+    clipped_data = input_data.rio.clip_box(*extent)
+
+    return clipped_data
