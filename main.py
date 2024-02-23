@@ -2,7 +2,7 @@ from rasterio.plot import plotting_extent
 
 from utils import (calculate_nbr, plot_nbr,
                    calculate_dnbr, get_pre_and_post_fire_paths, save_dnbr_as_tif_and_hist, calculate_nbr_plus,
-                   get_from_config)
+                   get_from_config, get_amount_of_pixels_in_classes)
 
 pre_fire, post_fire = get_pre_and_post_fire_paths(get_from_config("satellite")[0], get_from_config("method")[0])
 
@@ -24,3 +24,4 @@ dnbr = calculate_dnbr(pre_fire_nbr, post_fire_nbr)
 
 save_dnbr_as_tif_and_hist(dnbr, extent_landsat)
 
+print(get_amount_of_pixels_in_classes(dnbr))

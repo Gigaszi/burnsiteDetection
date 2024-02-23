@@ -1,6 +1,6 @@
 import os
 import re
-from typing import List
+from typing import List, Dict, Any
 
 import numpy as np
 import rasterio
@@ -57,7 +57,7 @@ def combine_tifs(tif_list) -> xr.DataArray:
         band = band.squeeze()
 
         out_xr.append(band)
-        out_xr[i]["band"] = i+1
+        out_xr[i]["band"] = i + 1
 
     return xr.concat(out_xr, dim="band")
 
@@ -195,8 +195,8 @@ def save_dnbr_as_tif_and_hist(dnbr, extent) -> None:
     # dnbr_landsat_class = np.digitize(dnbr, dnbr_class_bins)
 
     dnbr_class = xr.apply_ufunc(np.digitize,
-                                        dnbr,
-                                        dnbr_class_bins)
+                                dnbr,
+                                dnbr_class_bins)
 
     fig, ax = plt.subplots(figsize=(10, 8))
     dnbr_class.plot.imshow(cmap=nbr_cmap)
@@ -326,3 +326,19 @@ def clip_xarray_to_extent(input_data, extent):
     clipped_data = input_data.rio.clip_box(*extent)
 
     return clipped_data
+
+
+def get_amount_of_pixels_in_classes(classified_raster) -> int:
+    classified_raster = classified_raster.fillna(-1)
+    class_counts = classified_raster.groupby(classified_raster).count()
+    return class_counts
+
+
+def get_amount_of_changed_classes(dnbr1, dnbr2) -> Dict[Any, int]:
+    classes = np.unique(dnbr1)
+    changed_pixels_count: dict[Any, int] = {cls: 0 for cls in classes}
+
+    for cls in classes:
+        changed_pixels_count[cls] = np.sum(dnbr1[cls] & ~dnbr2[cls])
+
+    return changed_pixels_count
