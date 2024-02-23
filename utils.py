@@ -49,8 +49,15 @@ def combine_tifs(tif_list) -> xr.DataArray:
 
     out_xr = []
     for i, tif_path in enumerate(tif_list):
-        out_xr.append(rxr.open_rasterio(tif_path, masked=True).squeeze())
-        out_xr[i]["band"] = i + 1
+        band = rxr.open_rasterio(tif_path, masked=True)
+        if i in [0, 1]:
+            # Resample from 10 to 20m
+            band = band.rio.reproject(band.rio.crs, resolution=(20, 20))
+
+        band = band.squeeze()
+
+        out_xr.append(band)
+        out_xr[i]["band"] = i+1
 
     return xr.concat(out_xr, dim="band")
 
@@ -84,7 +91,7 @@ def get_paths_to_bands(path_to_directory: str, bands: list, satellite: str) -> l
         current_directory = os.path.dirname(__file__)
         folder_path = os.path.join(current_directory, path_to_directory)
 
-        pattern = re.compile(rf'.*_(?:{bands_pattern})_.+\.jp2')
+        pattern = re.compile(rf'.*_({bands_pattern})\.jp2$')
         matching_files = [file for file in os.listdir(folder_path) if pattern.match(file)]
 
         if matching_files:
@@ -187,33 +194,33 @@ def save_dnbr_as_tif_and_hist(dnbr, extent) -> None:
 
     # dnbr_landsat_class = np.digitize(dnbr, dnbr_class_bins)
 
-    dnbr_landsat_class = xr.apply_ufunc(np.digitize,
+    dnbr_class = xr.apply_ufunc(np.digitize,
                                         dnbr,
                                         dnbr_class_bins)
 
     fig, ax = plt.subplots(figsize=(10, 8))
-    dnbr_landsat_class.plot.imshow(cmap=nbr_cmap)
+    dnbr_class.plot.imshow(cmap=nbr_cmap)
     # Plot the data with a custom legend
     dnbr_landsat_class_plot = ma.masked_array(
-        dnbr_landsat_class.values, dnbr_landsat_class.isnull())
+        dnbr_class.values, dnbr_class.isnull())
     ax.set_title('Difference in NBR+ between 4th of June and 7th of October 2023')
     ax.set_xticks(ax.get_xticks())
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
     # plt.show()
     plt.savefig(f'{output_path[0]}/classes.png')
 
-    fig, ax = plt.subplots(figsize=(10, 8))
-    dnbr_landsat_class.plot()
+    # fig, ax = plt.subplots(figsize=(10, 8))
+    # dnbr_landsat_class.plot()
 
     # numpy_array = dnbr_landsat_class.values.flatten()
     # plt.bar(range(len(numpy_array)), numpy_array, color=nbr_colors)
 
-    ax.set_title('Difference in NBR+ between 4th of June and 7th of October 2023')
-    plt.savefig(f'{output_path[0]}/hist.png')
+    # ax.set_title('Difference in NBR+ between 4th of June and 7th of October 2023')
+    # plt.savefig(f'{output_path[0]}/hist.png')
 
     classes = np.unique(dnbr_landsat_class_plot)
     classes = classes.tolist()[:5]
-    reversed_dnbr = np.flip(dnbr_landsat_class_plot, axis=0)
+    dnbr_class = np.flip(dnbr_class, axis=0)
     transform = from_origin(extent[0], extent[2], dnbr.rio.resolution()[0],
                             dnbr.rio.resolution()[1])
 
@@ -221,14 +228,14 @@ def save_dnbr_as_tif_and_hist(dnbr, extent) -> None:
             output_path[0] + '/dnbr.tif',
             'w',
             driver='GTiff',
-            height=dnbr_landsat_class.shape[0],
-            width=dnbr_landsat_class.shape[1],
+            height=dnbr_class.shape[0],
+            width=dnbr_class.shape[1],
             count=1,
-            dtype=str(dnbr_landsat_class.dtype),
+            dtype=str(dnbr_class.dtype),
             crs=dnbr.rio.crs,
             transform=transform,
     ) as dst:
-        dst.write(dnbr_landsat_class, 1)
+        dst.write(dnbr_class, 1)
 
 
 def get_pre_and_post_fire_paths(satellite, method) -> tuple:
