@@ -6,7 +6,6 @@ dnbr_cat_names:
   - "High Severity"
 
 nbr_colors:
-  - "black"
   - "#778835"
   - "#a7c050"
   - "#0be344"
@@ -35,17 +34,17 @@ pre_fire:
   #- "sentinel"
   #- "bc_burn"
   #- "landsat_clip"
-  - "test"
+  - "sentinel/IMG_DATA_20230428"
 
 post_fire:
   #- "sentinel2"
   #- "bc_burn2"
   #- "landsat_clip2"
-  - "test2"
+  - "sentinel/IMG_DATA_20231020"
 
 satellite:
-  #- "sentinel"
-  - "landsat"
+  - "sentinel"
+  #- "landsat"
 
 output_path:
   - "output"
