@@ -330,19 +330,37 @@ def clip_xarray_to_extent(input_data, extent):
 
 
 def get_amount_of_pixels_in_classes(classified_raster,  method) -> int:
-    classified_raster = classified_raster.fillna(-1)
+    dnbr_class_bins = get_from_config("dnbr_class_bins")
+
+    dnbr_class = xr.apply_ufunc(np.digitize,
+                                classified_raster,
+                                dnbr_class_bins)
+
+    classified_raster = dnbr_class.fillna(-1)
     unique, counts = np.unique(classified_raster, return_counts=True)
 
+    assert sum(counts) == dnbr_class.size
+
     print(f"n of classes for {method}: {dict(zip(unique, counts))}")
-    print(f"km2 of classes for {method}: {dict(zip(unique, counts/1000000))}")
+    print(f"km2 of classes for {method}: {dict(zip(unique, counts*400/1000000))}")
+    print()
 
+def get_amount_of_changed_classes(dnbr, dnbr_plus) -> Dict[Any, int]:
+    dnbr_class_bins = get_from_config("dnbr_class_bins")
 
-def get_amount_of_changed_classes(dnbr1, dnbr2) -> Dict[Any, int]:
-    classes = np.unique(dnbr1)
+    dnbr_class = xr.apply_ufunc(np.digitize,
+                                dnbr,
+                                dnbr_class_bins)
+
+    dnbr_plus_class = xr.apply_ufunc(np.digitize,
+                                     dnbr_plus,
+                                     dnbr_class_bins)
+
+    classes = np.unique(dnbr)
     changed_pixels_count: dict[Any, int] = {cls: 0 for cls in classes}
 
     for cls in classes:
-        changed_pixels_count[cls] = np.sum(dnbr1[cls] & ~dnbr2[cls])
+        changed_pixels_count[cls] = np.sum(dnbr[cls] & ~dnbr_plus[cls])
 
     return changed_pixels_count
 
@@ -359,8 +377,7 @@ def compare_arrays(dnbr, dnbr_plus):
 
     comparison_result = dnbr_plus_class != dnbr_class
 
-    print(dnbr_plus_class.size)
-
     print(f"n of unequal pixels in both classifications: {comparison_result.to_numpy().sum()}")
     print(f"km2 of unequal area in both classifications: {comparison_result.to_numpy().sum()*400/1000000}")
     print(f"Percentage of unequal area in both classifications: {round(comparison_result.to_numpy().sum() / dnbr_plus_class.size * 100, 2)}")
+    print()

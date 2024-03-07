@@ -37,5 +37,5 @@ save_dnbr_as_tif_and_hist(dnbr, extent_landsat, method)
 
 compare_arrays(dnbr, dnbr_plus)
 
-# get_amount_of_pixels_in_classes(dnbr, "nbr")
-# get_amount_of_pixels_in_classes(dnbr_plus, "nbr+")
+get_amount_of_pixels_in_classes(dnbr, "nbr")
+get_amount_of_pixels_in_classes(dnbr_plus, "nbr+")
