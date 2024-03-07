@@ -329,10 +329,12 @@ def clip_xarray_to_extent(input_data, extent):
     return clipped_data
 
 
-def get_amount_of_pixels_in_classes(classified_raster) -> int:
+def get_amount_of_pixels_in_classes(classified_raster,  method) -> int:
     classified_raster = classified_raster.fillna(-1)
-    class_counts = classified_raster.groupby(classified_raster).count()
-    return class_counts
+    unique, counts = np.unique(classified_raster, return_counts=True)
+
+    print(f"n of classes for {method}: {dict(zip(unique, counts))}")
+    print(f"km2 of classes for {method}: {dict(zip(unique, counts/1000000))}")
 
 
 def get_amount_of_changed_classes(dnbr1, dnbr2) -> Dict[Any, int]:
@@ -343,3 +345,22 @@ def get_amount_of_changed_classes(dnbr1, dnbr2) -> Dict[Any, int]:
         changed_pixels_count[cls] = np.sum(dnbr1[cls] & ~dnbr2[cls])
 
     return changed_pixels_count
+
+def compare_arrays(dnbr, dnbr_plus):
+    dnbr_class_bins = get_from_config("dnbr_class_bins")
+
+    dnbr_class = xr.apply_ufunc(np.digitize,
+                                dnbr,
+                                dnbr_class_bins)
+
+    dnbr_plus_class = xr.apply_ufunc(np.digitize,
+                                dnbr_plus,
+                                dnbr_class_bins)
+
+    comparison_result = dnbr_plus_class != dnbr_class
+
+    print(dnbr_plus_class.size)
+
+    print(f"n of unequal pixels in both classifications: {comparison_result.to_numpy().sum()}")
+    print(f"km2 of unequal area in both classifications: {comparison_result.to_numpy().sum()*400/1000000}")
+    print(f"Percentage of unequal area in both classifications: {round(comparison_result.to_numpy().sum() / dnbr_plus_class.size * 100, 2)}")
