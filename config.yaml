@@ -6,13 +6,14 @@ dnbr_cat_names:
   - "High Severity"
 
 nbr_colors:
+  - "black"
   - "#778835"
   - "#a7c050"
   - "#0be344"
   - "#f8fc11"
   - "#f8b140"
   - "#f8671a"
-  - "#a600d4"
+  # - "#a600d4"
 
 dnbr_class_bins:
   - -0.5
