@@ -345,7 +345,7 @@ def get_amount_of_pixels_in_classes(classified_raster,  method) -> int:
     print(f"km2 of classes for {method}: {dict(zip(unique, counts*400/1000000))}")
     print()
 
-def get_amount_of_changed_classes(dnbr, dnbr_plus) -> Dict[Any, int]:
+def get_amount_of_changed_classes(dnbr, dnbr_plus):
     dnbr_class_bins = get_from_config("dnbr_class_bins")
 
     dnbr_class = xr.apply_ufunc(np.digitize,
@@ -356,13 +356,17 @@ def get_amount_of_changed_classes(dnbr, dnbr_plus) -> Dict[Any, int]:
                                      dnbr_plus,
                                      dnbr_class_bins)
 
-    classes = np.unique(dnbr)
-    changed_pixels_count: dict[Any, int] = {cls: 0 for cls in classes}
+    dnbr_class = dnbr_class.values.flatten()
+    dnbr_plus_class = dnbr_plus_class.values.flatten()
 
-    for cls in classes:
-        changed_pixels_count[cls] = np.sum(dnbr[cls] & ~dnbr_plus[cls])
+    two_d_array = np.array([dnbr_class, dnbr_plus_class])
+    change = two_d_array.transpose()
+    result_list = [': '.join(map(str, inner_list)) for inner_list in change]
 
-    return changed_pixels_count
+    unique_values, counts = np.unique(result_list, return_counts=True)
+
+    print(f"n changes in Classes: \n\n{dict(zip(unique_values, counts))}")
+    print(f"km2 changes in Classes: \n\n{dict(zip(unique_values, [x*400/1000000 for x in counts]))}")
 
 def compare_arrays(dnbr, dnbr_plus):
     dnbr_class_bins = get_from_config("dnbr_class_bins")

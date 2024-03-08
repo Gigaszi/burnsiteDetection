@@ -2,7 +2,7 @@ from rasterio.plot import plotting_extent
 
 from utils import (calculate_nbr, plot_nbr,
                    calculate_dnbr, get_pre_and_post_fire_paths, save_dnbr_as_tif_and_hist, calculate_nbr_plus,
-                   get_from_config, get_amount_of_pixels_in_classes, compare_arrays)
+                   get_from_config, get_amount_of_pixels_in_classes, compare_arrays, get_amount_of_changed_classes)
 
 
 # nbr+
@@ -39,3 +39,5 @@ compare_arrays(dnbr, dnbr_plus)
 
 get_amount_of_pixels_in_classes(dnbr, "nbr")
 get_amount_of_pixels_in_classes(dnbr_plus, "nbr+")
+
+get_amount_of_changed_classes(dnbr, dnbr_plus)
