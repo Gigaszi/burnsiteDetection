@@ -13,7 +13,7 @@ nbr_colors:
   - "#f8fc11"
   - "#f8b140"
   - "#f8671a"
-  - "#a600d4"
+  # - "#a600d4"
 
 dnbr_class_bins:
   - -0.5
@@ -35,17 +35,17 @@ pre_fire:
   #- "sentinel"
   #- "bc_burn"
   #- "landsat_clip"
-  - "test"
+  - "sentinel/IMG_DATA_20230428"
 
 post_fire:
   #- "sentinel2"
   #- "bc_burn2"
   #- "landsat_clip2"
-  - "test2"
+  - "sentinel/IMG_DATA_20231020"
 
 satellite:
-  #- "sentinel"
-  - "landsat"
+  - "sentinel"
+  #- "landsat"
 
 output_path:
   - "output"

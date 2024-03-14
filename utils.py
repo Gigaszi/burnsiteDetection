@@ -140,7 +140,8 @@ def calculate_nbr(bands) -> xr.DataArray:
     - DataArray: A DataArray with the computed Normalized Burn Ratio (NBR) value.
 
     """
-
+    # https://custom-scripts.sentinel-hub.com/custom-scripts/sentinel-2/nbr/
+    # ["08", "06", "12"]
     return (bands[0] - bands[2]) / (bands[0] + bands[2])
 
 
@@ -148,19 +149,18 @@ def calculate_nbr_plus(bands) -> xr.DataArray:
     # ['02', '03', '8A', '12']
     return ((bands[3] - bands[2] - bands[1] - bands[0]) / (bands[3] + bands[2] + bands[1] + bands[0]))
 
-
-def plot_nbr(bands, extent, date) -> None:
+def plot_nbr(bands, extent, date, method) -> None:
     fig, ax = plt.subplots(figsize=(12, 6))
 
     ep.plot_bands(bands,
-                  cmap='viridis',
+              cmap=plt.colormaps["PiYG"],
                   vmin=-1,
                   vmax=1,
                   ax=ax,
                   extent=extent,
-                  title=f"Derived Normalized Burn Ratio\n {date}")
+                  title=f"Derived {method} Ratio\n {date}")
 
-    plt.savefig(f'output/NBR_{date.replace(" ", "_")}.png')
+    plt.savefig(f'output/{method}_{date.replace(" ", "_")}.png')
 
 
 def calculate_dnbr(pre_fire_nbr, post_fire_nbr) -> xr.DataArray:
@@ -181,11 +181,13 @@ def calculate_dnbr(pre_fire_nbr, post_fire_nbr) -> xr.DataArray:
     return pre_fire_nbr - post_fire_nbr
 
 
-def save_dnbr_as_tif_and_hist(dnbr, extent) -> None:
+def save_dnbr_as_tif_and_hist(dnbr, extent, method) -> None:
     output_path = get_from_config("output_path")
-    dnbr_cat_names = get_from_config("dnbr_cat_names")
-
     nbr_colors = get_from_config("nbr_colors")
+
+    if method == "nbr+":
+        nbr_colors = nbr_colors[1:6]
+
     nbr_cmap = ListedColormap(nbr_colors)
 
     # Define dNBR classification bins
@@ -203,11 +205,10 @@ def save_dnbr_as_tif_and_hist(dnbr, extent) -> None:
     # Plot the data with a custom legend
     dnbr_landsat_class_plot = ma.masked_array(
         dnbr_class.values, dnbr_class.isnull())
-    ax.set_title('Difference in NBR+ between 4th of June and 7th of October 2023')
+    ax.set_title(f'Difference in {method.title()} between 28th of April and 20th of October 2023')
     ax.set_xticks(ax.get_xticks())
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
-    # plt.show()
-    plt.savefig(f'{output_path[0]}/classes.png')
+    plt.savefig(f'{output_path[0]}/classes_{method}.png')
 
     # fig, ax = plt.subplots(figsize=(10, 8))
     # dnbr_landsat_class.plot()
@@ -225,7 +226,7 @@ def save_dnbr_as_tif_and_hist(dnbr, extent) -> None:
                             dnbr.rio.resolution()[1])
 
     with rasterio.open(
-            output_path[0] + '/dnbr.tif',
+            output_path[0] + f'/d{method}.tif',
             'w',
             driver='GTiff',
             height=dnbr_class.shape[0],
@@ -256,7 +257,7 @@ def get_pre_and_post_fire_paths(satellite, method) -> tuple:
     return pre_fire, post_fire
 
 
-def plot_dnbr(dnbr, extent) -> None:
+def plot_dnbr(dnbr, extent, method) -> None:
     dnbr_cat_names = get_from_config("dnbr_cat_names")
 
     nbr_colors = get_from_config("nbr_colors")
@@ -286,7 +287,7 @@ def plot_dnbr(dnbr, extent) -> None:
                   cmap=nbr_cmap,
                   vmin=1,
                   vmax=5,
-                  title="Landsat dNBR - Cold Spring Fire Site \n June 22, 2016 - July 24, 2016",
+                  title=f'd{method.title()} between 28th of April and 20th of October 2023',
                   cbar=False,
                   scale=False,
                   extent=extent,
@@ -328,17 +329,59 @@ def clip_xarray_to_extent(input_data, extent):
     return clipped_data
 
 
-def get_amount_of_pixels_in_classes(classified_raster) -> int:
-    classified_raster = classified_raster.fillna(-1)
-    class_counts = classified_raster.groupby(classified_raster).count()
-    return class_counts
+def get_amount_of_pixels_in_classes(classified_raster,  method) -> int:
+    dnbr_class_bins = get_from_config("dnbr_class_bins")
 
+    dnbr_class = xr.apply_ufunc(np.digitize,
+                                classified_raster,
+                                dnbr_class_bins)
 
-def get_amount_of_changed_classes(dnbr1, dnbr2) -> Dict[Any, int]:
-    classes = np.unique(dnbr1)
-    changed_pixels_count: dict[Any, int] = {cls: 0 for cls in classes}
+    classified_raster = dnbr_class.fillna(-1)
+    unique, counts = np.unique(classified_raster, return_counts=True)
 
-    for cls in classes:
-        changed_pixels_count[cls] = np.sum(dnbr1[cls] & ~dnbr2[cls])
+    assert sum(counts) == dnbr_class.size
 
-    return changed_pixels_count
+    print(f"n of classes for {method}: {dict(zip(unique, counts))}")
+    print(f"km2 of classes for {method}: {dict(zip(unique, counts*400/1000000))}")
+    print()
+
+def get_amount_of_changed_classes(dnbr, dnbr_plus):
+    dnbr_class_bins = get_from_config("dnbr_class_bins")
+
+    dnbr_class = xr.apply_ufunc(np.digitize,
+                                dnbr,
+                                dnbr_class_bins)
+
+    dnbr_plus_class = xr.apply_ufunc(np.digitize,
+                                     dnbr_plus,
+                                     dnbr_class_bins)
+
+    dnbr_class = dnbr_class.values.flatten()
+    dnbr_plus_class = dnbr_plus_class.values.flatten()
+
+    two_d_array = np.array([dnbr_class, dnbr_plus_class])
+    change = two_d_array.transpose()
+    result_list = [': '.join(map(str, inner_list)) for inner_list in change]
+
+    unique_values, counts = np.unique(result_list, return_counts=True)
+
+    print(f"n changes in Classes: \n\n{dict(zip(unique_values, counts))}")
+    print(f"km2 changes in Classes: \n\n{dict(zip(unique_values, [x*400/1000000 for x in counts]))}")
+
+def compare_arrays(dnbr, dnbr_plus):
+    dnbr_class_bins = get_from_config("dnbr_class_bins")
+
+    dnbr_class = xr.apply_ufunc(np.digitize,
+                                dnbr,
+                                dnbr_class_bins)
+
+    dnbr_plus_class = xr.apply_ufunc(np.digitize,
+                                dnbr_plus,
+                                dnbr_class_bins)
+
+    comparison_result = dnbr_plus_class != dnbr_class
+
+    print(f"n of unequal pixels in both classifications: {comparison_result.to_numpy().sum()}")
+    print(f"km2 of unequal area in both classifications: {comparison_result.to_numpy().sum()*400/1000000}")
+    print(f"Percentage of unequal area in both classifications: {round(comparison_result.to_numpy().sum() / dnbr_plus_class.size * 100, 2)}")
+    print()
